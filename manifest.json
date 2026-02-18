@@ -1,8 +1,9 @@
 {
   "name": "오늘 밤 영화",
-  "short_name": "밤영화",
+  "short_name": "군대 영화 사이트",
   "description": "21:30~22:00 시작 TV 영화 편성표",
-  "start_url": "/",
+  "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#0A0C10",
   "theme_color": "#0A0C10",
