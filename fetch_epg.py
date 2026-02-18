@@ -9,7 +9,10 @@ from datetime import datetime, timezone, timedelta
 KST = timezone(timedelta(hours=9))
 NOW = datetime.now(KST)
 TODAY_ISO     = NOW.strftime("%Y-%m-%d")
-TODAY_COMPACT = NOW.strftime("%Y%m%d")
+dates = [
+    (NOW).strftime("%Y%m%d"),
+    (NOW + timedelta(days=1)).strftime("%Y%m%d"),
+]
 
 TARGET_CHANNELS = {
     'KBS1', 'KBS2', 'MBC', 'SBS',

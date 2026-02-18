@@ -2,8 +2,11 @@ name: 편성표 자동 수집
 
 on:
   schedule:
-    # 매일 KST 21:00 (UTC 12:00) 자동 실행
-    - cron: '0 12 * * *'
+    # 특정시간에 자동 실행
+    - cron: '0 0 * * *'   # KST 09:00
+    - cron: '0 6 * * *'   # KST 15:00
+    - cron: '0 10 * * *'  # KST 19:00
+    - cron: '0 12 * * *'  # KST 21:00
   # 수동 실행 (GitHub Actions 탭 → Run workflow)
   workflow_dispatch:
 
