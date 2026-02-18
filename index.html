@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+
+  <title>오늘 밤 영화</title>
+  <meta name="description" content="21:30~22:00 사이 시작하는 TV 영화 편성표" />
+
+  <!-- PWA -->
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#0A0C10" />
+  <meta name="mobile-web-app-capable" content="yes" />
+
+  <!-- iOS PWA -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="밤영화" />
+
+  <!-- OG (카카오/라인 공유용) -->
+  <meta property="og:title" content="오늘 밤 영화" />
+  <meta property="og:description" content="21:30~22:00 시작 TV 영화 편성표" />
+  <meta property="og:type" content="website" />
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+  <!-- 헤더 -->
+  <header>
+    <div class="header-inner">
+      <div class="header-left">
+        <h1>오늘 밤 영화 🎬</h1>
+        <div id="date-label" class="date-label"></div>
+      </div>
+      <button id="refresh-btn" class="icon-btn" aria-label="새로고침">
+        <!-- 새로고침 아이콘 -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+             stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
+          <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+          <polyline points="21 3 21 8 16 8"/>
+          <polyline points="3 21 3 16 8 16"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- 메인 -->
+  <main>
+    <!-- 로딩 -->
+    <div id="loading">
+      <div class="spinner"></div>
+      <div class="loading-text">편성표 불러오는 중…</div>
+    </div>
+
+    <!-- 컨텐츠 -->
+    <div id="main-content" style="display:none">
+      <div class="summary-panel">
+        <div id="summary"></div>
+      </div>
+      <div id="list"></div>
+    </div>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
