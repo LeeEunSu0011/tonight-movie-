@@ -18,7 +18,7 @@ tonight-movie/
     └── icon-512.png
 ```
 
-## 4단계: 폰에서 앱처럼 사용 (PWA)
+## 폰에서 앱처럼 사용 (PWA)
 
 ### iPhone
 1. Safari로 위 주소 접속
