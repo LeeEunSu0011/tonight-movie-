@@ -1,165 +1,120 @@
 """
-fetch_epg.py - 디버그 로그 강화 버전
+fetch_epg.py - epg.pw API 사용 버전 (해외 서버에서도 접근 가능)
 """
 import requests, json, re
 from datetime import datetime, timezone, timedelta
+from xml.etree import ElementTree as ET
 
 KST = timezone(timedelta(hours=9))
 NOW = datetime.now(KST)
 
-DATES = [
-    (NOW).strftime("%Y%m%d"),
-    (NOW + timedelta(days=1)).strftime("%Y%m%d"),
-]
 DATES_ISO = [
     (NOW).strftime("%Y-%m-%d"),
     (NOW + timedelta(days=1)).strftime("%Y-%m-%d"),
 ]
 
-TARGET_CHANNELS = {
-    'KBS1', 'KBS2', 'MBC', 'SBS',
-    'tvN', 'OCN', 'OCN Movies', 'OCN Movies2',
-    'CGV', '채널CGV',
-}
 WINDOW_START = 21 * 60 + 30
 WINDOW_END   = 22 * 60
 
-WAVVE_KEY = "E5F3E0D30947AA5440556471321BB6D9"
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
-    "Accept": "application/json",
-    "Origin": "https://www.wavve.com",
-    "Referer": "https://www.wavve.com/",
+# epg.pw 채널 ID 매핑 (channel_id → 표시 이름)
+# https://epg.pw/areas/kr.html 에서 확인된 한국 채널 ID
+CHANNEL_MAP = {
+    'KBS1TV.kr':    'KBS1',
+    'KBS2TV.kr':    'KBS2',
+    'MBCTV.kr':     'MBC',
+    'SBSTV.kr':     'SBS',
+    'tvN.kr':       'tvN',
+    'OCN.kr':       'OCN',
+    'CGV.kr':       'CGV',
+    'ChannelCGV.kr':'채널CGV',
 }
 
-def parse_time(raw):
-    if not raw: return ''
-    m = re.search(r'(\d{1,2}):(\d{2})', str(raw))
-    if m: return f"{int(m.group(1)):02d}:{m.group(2)}"
-    if re.match(r'^\d{4}$', str(raw)): return f"{raw[:2]}:{raw[2:4]}"
-    return ''
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (compatible; EPGFetcher/1.0)",
+    "Accept": "application/json, application/xml",
+}
 
-def in_window(start):
-    if not start: return False
-    h, m = map(int, start.split(':'))
+def time_str(ts):
+    """epoch timestamp → HH:MM (KST)"""
+    try:
+        dt = datetime.fromtimestamp(int(ts), tz=KST)
+        return dt.strftime("%H:%M")
+    except: return ''
+
+def in_window(start_str):
+    if not start_str: return False
+    h, m = map(int, start_str.split(':'))
     return WINDOW_START <= h * 60 + m < WINDOW_END
 
-def calc_runtime(start, end):
+def date_of_ts(ts):
+    """epoch timestamp → YYYY-MM-DD (KST)"""
     try:
-        sh, sm = map(int, start.split(':'))
-        eh, em = map(int, end.split(':'))
-        diff = (eh*60+em) - (sh*60+sm)
-        if diff < 0: diff += 1440
-        return diff if diff > 0 else None
-    except: return None
+        dt = datetime.fromtimestamp(int(ts), tz=KST)
+        return dt.strftime("%Y-%m-%d")
+    except: return ''
 
-def parse_rating(raw):
-    raw = str(raw)
-    if re.search(r'19|adult', raw, re.I): return '19세'
-    if re.search(r'15', raw): return '15세'
-    if re.search(r'12', raw): return '12세'
-    if re.search(r'7|all|^0$', raw, re.I): return '전체'
-    return raw or ''
-
-def fetch_channels():
-    url = f"https://api.wavve.com/v4/live/channels?apikey={WAVVE_KEY}&credential=none&device=mobile&drm=none&formattype=json&partnerId=P-CH&prdtype=2"
+def fetch_epg_json(channel_id, channel_name, date_iso):
+    """epg.pw JSON API 호출"""
+    url = f"https://epg.pw/api/epg.json?channel_id={channel_id}&date={date_iso}"
     try:
         r = requests.get(url, headers=HEADERS, timeout=15)
         r.raise_for_status()
-        body = r.json()
-
-        # ★ 디버그: 실제 응답 구조 출력
-        print(f"채널 API 응답 키: {list(body.keys())}")
-        items = body.get('data', {}).get('items', []) or body.get('items', [])
-        print(f"전체 채널 수: {len(items)}")
-
-        result = {}
-        for ch in items:
-            code = ch.get('channelcode') or ch.get('channel_code', '')
-            name = ch.get('channelname') or ch.get('channel_name', '')
-            if code and name:
-                result[code] = name
-                # ★ 대상 채널이면 표시
-                if name in TARGET_CHANNELS:
-                    print(f"  ✅ 대상채널 발견: [{code}] {name}")
-
-        print(f"\n매핑된 채널 수: {len(result)}")
-        return result
-    except Exception as e:
-        print(f"채널 API 실패: {e}")
-        return {}
-
-def fallback_channels():
-    return {
-        'KBS1':'KBS1','KBS2':'KBS2','MBC':'MBC','SBS':'SBS',
-        'C01':'tvN','C23':'OCN','OCN_MOVIES':'OCN Movies',
-        'CGV':'CGV','CH_CGV':'채널CGV',
-    }
-
-def fetch_epg(channel_code, channel_name, date_compact, date_iso):
-    url = (f"https://api.wavve.com/v4/live/epgs?apikey={WAVVE_KEY}"
-           f"&credential=none&device=mobile&drm=none&formattype=json"
-           f"&limit=500&offset=0&partnerId=P-CH&prdtype=2"
-           f"&startdate={date_compact}&enddate={date_compact}"
-           f"&channelcode={channel_code}")
-    try:
-        r = requests.get(url, headers=HEADERS, timeout=15)
-        r.raise_for_status()
-        body = r.json()
-        items = body.get('data', {}).get('items', []) or body.get('items', [])
-        print(f"    [{channel_name}] 전체 {len(items)}개 프로그램")
+        programs = r.json()
+        print(f"  [{channel_name}] {len(programs)}개 프로그램")
 
         results = []
-        for item in items:
-            start = parse_time(item.get('starttime') or item.get('start_time', ''))
-            end   = parse_time(item.get('endtime')   or item.get('end_time', ''))
-            if not start: continue
+        for p in programs:
+            # epg.pw는 start/stop이 epoch timestamp
+            start = time_str(p.get('start', 0))
+            end   = time_str(p.get('stop', 0))
+            prog_date = date_of_ts(p.get('start', 0))
+
+            if prog_date != date_iso: continue
             if not in_window(start): continue
 
-            genres = []
-            if item.get('category_name'): genres.append(item['category_name'])
-            if item.get('genre') and item.get('genre') != item.get('category_name'):
-                genres.append(item['genre'])
+            title = p.get('title', {})
+            if isinstance(title, dict):
+                title = title.get('ko') or title.get('en') or next(iter(title.values()), '(제목 없음)')
 
-            runtime = item.get('runtime')
-            runtime = int(runtime) if runtime else calc_runtime(start, end)
+            desc = p.get('description', {})
+            if isinstance(desc, dict):
+                desc = desc.get('ko') or desc.get('en') or next(iter(desc.values()), '')
+
+            category = p.get('category', {})
+            genres = []
+            if isinstance(category, dict):
+                cat = category.get('ko') or category.get('en') or ''
+                if cat: genres.append(cat)
+            elif isinstance(category, str) and category:
+                genres.append(category)
 
             results.append({
                 "date":       date_iso,
                 "channel":    channel_name,
                 "start":      start,
                 "end":        end,
-                "title":      item.get('title') or item.get('program_name', '(제목 없음)'),
+                "title":      title or '(제목 없음)',
                 "genres":     genres,
-                "runtimeMin": runtime,
-                "age":        parse_rating(item.get('ratings') or item.get('age', '')),
-                "plot":       item.get('synopsis') or item.get('description', ''),
+                "runtimeMin": None,
+                "age":        '',
+                "plot":       desc or '',
             })
 
-        if results:
-            for p in results:
-                print(f"    ★ {p['start']} {p['title']}")
+            print(f"    ★ {start} {title}")
         return results
     except Exception as e:
-        print(f"    EPG 실패 [{channel_name}]: {e}")
+        print(f"  [{channel_name}] 실패: {e}")
         return []
 
 def main():
-    print(f"[{NOW.strftime('%Y-%m-%d %H:%M KST')}] 편성표 수집 시작")
+    print(f"[{NOW.strftime('%Y-%m-%d %H:%M KST')}] epg.pw 편성표 수집 시작")
     print(f"수집 날짜: {', '.join(DATES_ISO)}\n")
 
-    channel_map = fetch_channels()
-    if not channel_map:
-        print("fallback 채널맵 사용")
-        channel_map = fallback_channels()
-
     all_items = []
-    for date_compact, date_iso in zip(DATES, DATES_ISO):
-        print(f"\n── {date_iso} EPG 수집 ──")
-        for code, name in channel_map.items():
-            if name not in TARGET_CHANNELS:
-                continue
-            items = fetch_epg(code, name, date_compact, date_iso)
+    for date_iso in DATES_ISO:
+        print(f"── {date_iso} 수집 중 ──")
+        for channel_id, channel_name in CHANNEL_MAP.items():
+            items = fetch_epg_json(channel_id, channel_name, date_iso)
             all_items.extend(items)
 
     all_items.sort(key=lambda x: (x['date'], x['start']))
