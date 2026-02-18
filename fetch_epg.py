@@ -1,15 +1,12 @@
 """
-fetch_epg.py
-GitHub Actions에서 실행 - Wavve API로 편성표 수집 후 data.json 저장
+fetch_epg.py - 디버그 로그 강화 버전
 """
 import requests, json, re
 from datetime import datetime, timezone, timedelta
 
-# ── 설정 ──────────────────────────────────────────
 KST = timezone(timedelta(hours=9))
 NOW = datetime.now(KST)
 
-# 오늘 + 내일 데이터 모두 수집
 DATES = [
     (NOW).strftime("%Y%m%d"),
     (NOW + timedelta(days=1)).strftime("%Y%m%d"),
@@ -35,7 +32,6 @@ HEADERS = {
     "Referer": "https://www.wavve.com/",
 }
 
-# ── 유틸 ─────────────────────────────────────────
 def parse_time(raw):
     if not raw: return ''
     m = re.search(r'(\d{1,2}):(\d{2})', str(raw))
@@ -65,18 +61,30 @@ def parse_rating(raw):
     if re.search(r'7|all|^0$', raw, re.I): return '전체'
     return raw or ''
 
-# ── Wavve API ─────────────────────────────────────
 def fetch_channels():
     url = f"https://api.wavve.com/v4/live/channels?apikey={WAVVE_KEY}&credential=none&device=mobile&drm=none&formattype=json&partnerId=P-CH&prdtype=2"
     try:
         r = requests.get(url, headers=HEADERS, timeout=15)
         r.raise_for_status()
-        items = r.json().get('data', {}).get('items', []) or r.json().get('items', [])
-        return {
-            (ch.get('channelcode') or ch.get('channel_code', '')):
-            (ch.get('channelname') or ch.get('channel_name', ''))
-            for ch in items
-        }
+        body = r.json()
+
+        # ★ 디버그: 실제 응답 구조 출력
+        print(f"채널 API 응답 키: {list(body.keys())}")
+        items = body.get('data', {}).get('items', []) or body.get('items', [])
+        print(f"전체 채널 수: {len(items)}")
+
+        result = {}
+        for ch in items:
+            code = ch.get('channelcode') or ch.get('channel_code', '')
+            name = ch.get('channelname') or ch.get('channel_name', '')
+            if code and name:
+                result[code] = name
+                # ★ 대상 채널이면 표시
+                if name in TARGET_CHANNELS:
+                    print(f"  ✅ 대상채널 발견: [{code}] {name}")
+
+        print(f"\n매핑된 채널 수: {len(result)}")
+        return result
     except Exception as e:
         print(f"채널 API 실패: {e}")
         return {}
@@ -97,12 +105,16 @@ def fetch_epg(channel_code, channel_name, date_compact, date_iso):
     try:
         r = requests.get(url, headers=HEADERS, timeout=15)
         r.raise_for_status()
-        items = r.json().get('data', {}).get('items', []) or r.json().get('items', [])
+        body = r.json()
+        items = body.get('data', {}).get('items', []) or body.get('items', [])
+        print(f"    [{channel_name}] 전체 {len(items)}개 프로그램")
+
         results = []
         for item in items:
             start = parse_time(item.get('starttime') or item.get('start_time', ''))
             end   = parse_time(item.get('endtime')   or item.get('end_time', ''))
-            if not start or not in_window(start): continue
+            if not start: continue
+            if not in_window(start): continue
 
             genres = []
             if item.get('category_name'): genres.append(item['category_name'])
@@ -123,45 +135,39 @@ def fetch_epg(channel_code, channel_name, date_compact, date_iso):
                 "age":        parse_rating(item.get('ratings') or item.get('age', '')),
                 "plot":       item.get('synopsis') or item.get('description', ''),
             })
+
+        if results:
+            for p in results:
+                print(f"    ★ {p['start']} {p['title']}")
         return results
     except Exception as e:
-        print(f"  EPG 실패 [{channel_name} / {date_iso}]: {e}")
+        print(f"    EPG 실패 [{channel_name}]: {e}")
         return []
 
-# ── 메인 ─────────────────────────────────────────
 def main():
     print(f"[{NOW.strftime('%Y-%m-%d %H:%M KST')}] 편성표 수집 시작")
-    print(f"수집 날짜: {', '.join(DATES_ISO)}")
+    print(f"수집 날짜: {', '.join(DATES_ISO)}\n")
 
     channel_map = fetch_channels()
     if not channel_map:
         print("fallback 채널맵 사용")
         channel_map = fallback_channels()
-    print(f"채널 수: {len(channel_map)}")
 
     all_items = []
     for date_compact, date_iso in zip(DATES, DATES_ISO):
-        print(f"\n── {date_iso} 수집 중 ──")
+        print(f"\n── {date_iso} EPG 수집 ──")
         for code, name in channel_map.items():
             if name not in TARGET_CHANNELS:
                 continue
-            print(f"  {name} ({code})")
             items = fetch_epg(code, name, date_compact, date_iso)
             all_items.extend(items)
 
     all_items.sort(key=lambda x: (x['date'], x['start']))
-    print(f"\n총 {len(all_items)}개 프로그램 수집")
+    print(f"\n✅ 총 {len(all_items)}개 프로그램 수집 완료")
 
-    # ★ 수집 시간 기록 (프론트에서 최신 여부 확인용)
-    updated_at = NOW.strftime("%Y-%m-%dT%H:%M:%S+09:00")  # ISO8601 KST
-
-    data = {
-        "updatedAt": updated_at,   # 마지막 수집 시간
-        "items": all_items,
-    }
-
+    updated_at = NOW.strftime("%Y-%m-%dT%H:%M:%S+09:00")
     with open('data.json', 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+        json.dump({"updatedAt": updated_at, "items": all_items}, f, ensure_ascii=False, indent=2)
     print(f"data.json 저장 완료 (updatedAt: {updated_at})")
 
 if __name__ == '__main__':
