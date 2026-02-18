@@ -293,3 +293,33 @@ main {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.3; }
 }
+
+/* ── 푸터 ── */
+footer {
+  padding: 40px var(--pad) calc(40px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+  background: var(--bg2); /* 헤더보다 조금 더 밝은 배경으로 구분 */
+  text-align: center;
+}
+
+.footer-inner {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.source-info {
+  font-size: 13px;
+  color: var(--text2);
+  margin-bottom: 8px;
+}
+
+.source-info strong {
+  color: var(--accent); /* Wavve 강조 */
+  font-weight: 700;
+}
+
+.copyright {
+  font-size: 11px;
+  color: rgba(155, 163, 184, 0.5); /* 아주 연하게 처리 */
+  letter-spacing: -0.1px;
+}
