@@ -15,7 +15,7 @@ jobs:
       - name: 저장소 체크아웃
         uses: actions/checkout@v4
         with:
-          ref: main
+          fetch-depth: 0   # shallow clone 방지
 
       - name: Python 설치
         uses: actions/setup-python@v5
@@ -32,7 +32,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git pull --rebase origin main
           git add data.json
-          git diff --staged --quiet || git commit -m "편성표 자동 업데이트 $(date +'%Y-%m-%d %H:%M')"
-          git push
+          git diff --staged --quiet && echo "변경사항 없음" && exit 0
+          git commit -m "편성표 자동 업데이트 $(date +'%Y-%m-%d %H:%M')"
+          git push origin HEAD:main --force-with-lease
