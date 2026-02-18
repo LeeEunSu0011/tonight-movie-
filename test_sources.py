@@ -1,49 +1,53 @@
 """
-test_sources.py - GitHub Actions에서 실행해서 어떤 소스가 되는지 테스트
+test_sources.py v3 - 네이버 최소 요청으로 전체 편성표 가져오기 탐색
 """
 import requests, json
+from datetime import datetime, timezone, timedelta
+
+KST = timezone(timedelta(hours=9))
+NOW = datetime.now(KST)
+DATE_DASH = NOW.strftime("%Y-%m-%d")
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
     "Accept": "application/json, text/html, */*",
     "Accept-Language": "ko-KR,ko;q=0.9",
-    "Referer": "https://www.naver.com/",
+    "Referer": "https://tv.naver.com/schedule",
 }
 
-DATE = "20260218"
+results = {}
 
-tests = [
-    ("KBS1 편성표",  f"https://pcast.kbs.co.kr/api/schedule?channel=K1&date={DATE}"),
-    ("KBS2 편성표",  f"https://pcast.kbs.co.kr/api/schedule?channel=K2&date={DATE}"),
-    ("MBC 편성표",   f"https://schedule.imbc.com/Schedule/Onair?startDt={DATE}&endDt={DATE}&svcType=0101"),
-    ("SBS 편성표",   f"https://static.apis.sbs.co.kr/program-api/1.0/schedule/tv?date={DATE}&channelCode=S01"),
-    ("TVING tvN",   f"https://api.tving.com/v2/media/schedules?broadDate={DATE}&broadcastDate={DATE}&pageNo=1&pageSize=100&channelCode=C00004"),
-    ("TVING OCN",   f"https://api.tving.com/v2/media/schedules?broadDate={DATE}&broadcastDate={DATE}&pageNo=1&pageSize=100&channelCode=C00019"),
-    ("네이버 편성표", f"https://tv.naver.com/schedule/channel?scheduledDate={DATE}&channelId=9"),
+# 네이버 TV 편성표 - 전체 채널 한번에 가져오는 URL 탐색
+urls = [
+    # 전체 편성표 페이지 (한 번에 모든 채널)
+    ("전체편성표_메인",     f"https://tv.naver.com/schedule?scheduledDate={DATE_DASH}"),
+    # 내부 API 후보들
+    ("API_전체채널",        f"https://tv.naver.com/api/schedule?scheduledDate={DATE_DASH}"),
+    ("API_편성표v1",        f"https://tv.naver.com/api/v1/schedules?date={DATE_DASH}"),
+    ("API_편성표v2",        f"https://api.tv.naver.com/v1/schedules?date={DATE_DASH}"),
 ]
 
-results = {}
-for name, url in tests:
+for name, url in urls:
     try:
         r = requests.get(url, headers=HEADERS, timeout=10)
-        ok = r.status_code == 200 and len(r.content) > 200
+        size = len(r.content)
+        print(f"\n[{name}] 상태:{r.status_code} 크기:{size}bytes")
         try:
             j = r.json()
-            fmt = "JSON"
+            print(f"  → JSON! 키: {list(j.keys()) if isinstance(j, dict) else type(j)}")
+            print(f"  → 샘플: {str(j)[:300]}")
+            results[name] = {"ok": True, "format": "JSON", "sample": str(j)[:300]}
         except:
-            fmt = "HTML"
-        print(f"{'✅' if ok else '⚠️ '} {name}: {r.status_code} {fmt} ({len(r.content)}bytes)")
-        results[name] = {"status": r.status_code, "format": fmt, "size": len(r.content), "ok": ok}
-        if ok and fmt == "JSON":
-            print(f"   → 응답 샘플: {str(j)[:200]}")
+            # HTML이면 앞부분만 출력
+            preview = r.text[:500]
+            print(f"  → HTML 앞부분:\n{preview}")
+            results[name] = {"ok": size > 1000, "format": "HTML", "size": size, "preview": preview}
     except Exception as e:
-        print(f"❌ {name}: {e}")
-        results[name] = {"status": 0, "ok": False, "error": str(e)}
+        print(f"  → 실패: {e}")
+        results[name] = {"ok": False, "error": str(e)}
 
-print("\n\n=== 결과 요약 ===")
+with open("test_results.json", "w", encoding="utf-8") as f:
+    json.dump(results, f, ensure_ascii=False, indent=2)
+print("\n\n=== 요약 ===")
 for name, r in results.items():
     print(f"{'✅' if r.get('ok') else '❌'} {name}")
-
-with open("test_results.json", "w") as f:
-    json.dump(results, f, ensure_ascii=False, indent=2)
-print("\ntest_results.json 저장 완료")
