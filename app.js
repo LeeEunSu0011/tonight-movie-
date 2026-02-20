@@ -142,9 +142,9 @@ function renderPrograms(items) {
       ? `<div class="runtime">⏱ ${p.runtimeMin}분</div>`
       : '';
 
-    // 장르 태그 (영화 제외, 중복 제외)
-    const genreSkip = new Set(['영화', 'Movie / Drama', 'movie']);
-    const genres = (p.genres || []).filter(g => !genreSkip.has(g)).slice(0, 2);
+    // 변경: '영화' 태그 하나만 남기고 'Movie / Drama' 영문만 제거
+    const genreSkip = new Set(['Movie / Drama']);
+    const genres = (p.genres || []).slice(0, 2).filter(g => !genreSkip.has(g));
     const genreHtml = genres.map(g => `<span class="tag">${g}</span>`).join('');
     const tagsHtml = genreHtml ? `<div class="tags">${genreHtml}</div>` : '';
 
