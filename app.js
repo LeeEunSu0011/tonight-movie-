@@ -1,8 +1,8 @@
-// app.js - data.json에서 편성표 로드
+// app.js - 오늘 밤 영화 v2
 
 const CONFIG = {
   dataUrl: './data.json',
-  cacheKey: 'epg_cache_v8',
+  cacheKey: 'epg_cache_v9',
   cacheAgeMin: 30,
   updateSchedule: [0, 6, 12, 18],
 };
@@ -15,6 +15,32 @@ function nowKST() { return new Date(Date.now() + KST_OFFSET); }
 function todayIso() {
   const d = nowKST();
   return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth()+1)}-${pad2(d.getUTCDate())}`;
+}
+
+// ── 연령 배지 ──────────────────────────────────
+function getAgeBadge(age) {
+  if (!age) return '';
+  const a = age.replace(/\s/g, '');
+
+  let cls = 'all', label = '';
+
+  if (a.includes('19') || a.includes('청소년관람불가')) {
+    cls = 'age19';
+    label = '🔞 19';
+  } else if (a.includes('15')) {
+    cls = 'age15';
+    label = '⚠️ 15';
+  } else if (a.includes('12')) {
+    cls = 'age12';
+    label = '⚠️ 12';
+  } else if (a.includes('전체') || a.includes('ALL') || a.includes('0')) {
+    cls = 'all';
+    label = '전체';
+  } else {
+    return '';
+  }
+
+  return `<span class="age-badge ${cls}">${label}</span>`;
 }
 
 // ── 업데이트 뱃지 ──────────────────────────────
@@ -30,9 +56,9 @@ function getUpdateStatus(updatedAtIso) {
   lastScheduled.setUTCHours(lastHour - 9, 5, 0, 0);
   const fresh = updatedAt >= lastScheduled;
   const next = CONFIG.updateSchedule.find(h => h > kstHour) ?? CONFIG.updateSchedule[0];
-  let timeLabel = diffMin < 60 ? `${diffMin}분 전`
+  const timeLabel = diffMin < 60 ? `${diffMin}분 전`
     : diffMin < 1440 ? `${Math.floor(diffMin/60)}시간 전`
-    : updatedAt.toLocaleString('ko-KR', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+    : updatedAt.toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   return { fresh, label: `마지막 업데이트: ${timeLabel}`, nextLabel: `다음 업데이트: ${pad2(next)}:00` };
 }
 
@@ -48,6 +74,14 @@ function renderUpdateBadge(updatedAtIso) {
   `;
 }
 
+// ── 날짜 라벨 ─────────────────────────────────
+function setDateLabel() {
+  const d = new Date();
+  const days = ['일', '월', '화', '수', '목', '금', '토'];
+  $('date-label').textContent =
+    `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 (${days[d.getDay()]})`;
+}
+
 // ── 캐시 ──────────────────────────────────────
 function loadCache() {
   try {
@@ -59,6 +93,7 @@ function loadCache() {
     return obj;
   } catch { return null; }
 }
+
 function saveCache(data) {
   try {
     localStorage.setItem(CONFIG.cacheKey, JSON.stringify({
@@ -69,46 +104,63 @@ function saveCache(data) {
   } catch {}
 }
 
-// ── 렌더링 ──────────────────────────────────────
+// ── 렌더링 ────────────────────────────────────
 function setLoading(on) {
-  $('loading').style.display      = on ? 'flex'  : 'none';
-  $('main-content').style.display = on ? 'none'  : 'block';
-}
-
-function setDateLabel() {
-  const d = new Date(), days = ['일','월','화','수','목','금','토'];
-  $('date-label').textContent =
-    `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${days[d.getDay()]})`;
+  $('loading').style.display      = on ? 'flex' : 'none';
+  $('main-content').style.display = on ? 'none' : 'block';
 }
 
 function renderPrograms(items) {
   const today = todayIso();
-  const todayItems = items.filter(p => p.date === today);
+  const todayItems = (items || []).filter(p => p.date === today);
   const list = $('list');
   list.innerHTML = '';
-  if (!todayItems || todayItems.length === 0) {
+
+  if (todayItems.length === 0) {
     list.innerHTML = `
       <div class="empty-panel">
         <div class="empty-icon">📭</div>
-        <div class="empty-title">오늘 21:30~22:00 시작 영화가 없어요</div>
+        <div class="empty-title">오늘 해당 시간대 영화가 없어요</div>
         <div class="empty-desc">새로고침을 눌러 다시 시도해보세요.</div>
       </div>`;
     return;
   }
+
   todayItems.forEach((p, i) => {
     const card = document.createElement('div');
     card.className = 'card';
     card.style.animationDelay = `${i * 60}ms`;
-    const tags = [...(p.genres||[]).slice(0,3), p.age, p.runtimeMin ? `${p.runtimeMin}분` : null]
-      .filter(Boolean).map(t => `<span class="tag">${t}</span>`).join('');
+
+    // 줄거리: plot이 제목 반복이 아닌 경우만 표시
+    const hasRealPlot = p.plot && p.plot !== p.title && !p.plot.match(/^\s*\d+회\s*$/);
+    const plotHtml = hasRealPlot
+      ? `<div class="plot">${p.plot}</div>`
+      : '';
+
+    // 런타임
+    const runtimeHtml = p.runtimeMin
+      ? `<div class="runtime">⏱ ${p.runtimeMin}분</div>`
+      : '';
+
+    // 장르 태그 (영화 제외, 중복 제외)
+    const genreSkip = new Set(['영화', 'Movie / Drama', 'movie']);
+    const genres = (p.genres || []).filter(g => !genreSkip.has(g)).slice(0, 2);
+    const genreHtml = genres.map(g => `<span class="tag">${g}</span>`).join('');
+    const tagsHtml = genreHtml ? `<div class="tags">${genreHtml}</div>` : '';
+
     card.innerHTML = `
       <div class="time-row">
         <span class="time">${p.start}${p.end ? ` ~ ${p.end}` : ''}</span>
         <span class="channel-badge">${p.channel}</span>
       </div>
-      <div class="title">${p.title}</div>
-      ${tags ? `<div class="tags">${tags}</div>` : ''}
-      ${p.plot ? `<div class="plot">${p.plot}</div>` : ''}`;
+      <div class="title-row">
+        <span class="title">${p.title}</span>
+        ${getAgeBadge(p.age)}
+      </div>
+      ${tagsHtml}
+      ${plotHtml}
+      ${runtimeHtml}
+    `;
     list.appendChild(card);
   });
 }
@@ -122,10 +174,10 @@ function showError(msg) {
       <div class="error-desc">${msg}</div>
       <button class="retry-btn" onclick="start(true)">다시 시도</button>
     </div>`;
-  $('summary').textContent = '로드 실패';
+  $('summary').textContent = '';
 }
 
-// ── 앱 시작 ──────────────────────────────────────
+// ── 앱 시작 ───────────────────────────────────
 async function start(forceRefresh = false) {
   setLoading(true);
   setDateLabel();
@@ -134,8 +186,8 @@ async function start(forceRefresh = false) {
     const cached = loadCache();
     if (cached) {
       setLoading(false);
-      const todayItems = (cached.items || []).filter(p => p.date === todayIso());
-      $('summary').textContent = `21:30~22:00 시작 · ${todayItems.length}개 · 캐시`;
+      const cnt = (cached.items || []).filter(p => p.date === todayIso()).length;
+      $('summary').textContent = `21:30~22:10 시작 · 영화 ${cnt}편`;
       renderPrograms(cached.items || []);
       renderUpdateBadge(cached.updatedAt);
       return;
@@ -147,12 +199,12 @@ async function start(forceRefresh = false) {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     saveCache(data);
-    const todayItems = (data.items || []).filter(p => p.date === todayIso());
+    const cnt = (data.items || []).filter(p => p.date === todayIso()).length;
     setLoading(false);
-    $('summary').textContent = `21:30~22:00 시작 · ${todayItems.length}개`;
+    $('summary').textContent = `21:30~22:10 시작 · 영화 ${cnt}편`;
     renderPrograms(data.items || []);
     renderUpdateBadge(data.updatedAt);
-  } catch(e) {
+  } catch (e) {
     showError(e.message || '네트워크 오류');
   }
 }
