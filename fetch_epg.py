@@ -89,7 +89,7 @@ def main():
         title = strip_episode(title_el.text or '') if title_el is not None else ''
 
         desc_el = prog.find('desc')
-        plot = desc_el.text.strip() if desc_el is not None and desc_el.text else ''
+        plot = clean_plot(desc_el.text) if desc_el is not None and desc_el.text else ''
 
         genres = [c.text.strip() for c in prog.findall('category') if c.text]
 
