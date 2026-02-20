@@ -1,9 +1,9 @@
-// app.js - Wavve API 직접 호출 (브라우저 = 한국 IP)
+// app.js - data.json에서 편성표 로드
 
 const CONFIG = {
-  wavveKey: 'E5F3E0D30947AA5440556471321BB6D9',
-  cacheKey: 'epg_cache_v7',
-  cacheAgeMin: 60,
+  dataUrl: './data.json',
+  cacheKey: 'epg_cache_v8',
+  cacheAgeMin: 30,
   updateSchedule: [0, 6, 12, 18],
 };
 
@@ -15,24 +15,6 @@ function nowKST() { return new Date(Date.now() + KST_OFFSET); }
 function todayIso() {
   const d = nowKST();
   return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth()+1)}-${pad2(d.getUTCDate())}`;
-}
-function todayCompact() { return todayIso().replace(/-/g, ''); }
-
-const WINDOW_START = 21 * 60 + 30;
-const WINDOW_END   = 22 * 60;
-
-function inWindow(start) {
-  if (!start) return false;
-  const [h, m] = start.split(':').map(Number);
-  return WINDOW_START <= h * 60 + m && h * 60 + m < WINDOW_END;
-}
-
-function parseTime(raw) {
-  if (!raw) return '';
-  const m = String(raw).match(/(\d{1,2}):(\d{2})/);
-  if (m) return `${m[1].padStart(2,'0')}:${m[2]}`;
-  if (/^\d{4}$/.test(String(raw))) return `${String(raw).slice(0,2)}:${String(raw).slice(2,4)}`;
-  return '';
 }
 
 // ── 업데이트 뱃지 ──────────────────────────────
@@ -66,79 +48,6 @@ function renderUpdateBadge(updatedAtIso) {
   `;
 }
 
-// ── Wavve API (브라우저에서 직접 호출) ───────────
-const WAVVE_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)',
-  'Accept': 'application/json',
-  'Origin': 'https://www.wavve.com',
-  'Referer': 'https://www.wavve.com/',
-};
-
-const CHANNEL_MAP = {
-  'KBS1': 'KBS1', 'KBS2': 'KBS2', 'MBC': 'MBC', 'SBS': 'SBS',
-  'C01': 'tvN', 'C23': 'OCN', 'OCN_MOVIES': 'OCN Movies',
-  'CGV': 'CGV', 'CH_CGV': '채널CGV',
-};
-
-async function fetchWavveChannels() {
-  const url = `https://api.wavve.com/v4/live/channels?apikey=${CONFIG.wavveKey}&credential=none&device=mobile&drm=none&formattype=json&partnerId=P-CH&prdtype=2`;
-  const res = await fetch(url, { headers: WAVVE_HEADERS });
-  if (!res.ok) throw new Error(`채널 API ${res.status}`);
-  const data = await res.json();
-  const items = data?.data?.items || data?.items || [];
-  const map = {};
-  items.forEach(ch => {
-    const code = ch.channelcode || ch.channel_code || '';
-    const name = ch.channelname || ch.channel_name || '';
-    if (code && name) map[code] = name;
-  });
-  return Object.keys(map).length > 0 ? map : CHANNEL_MAP;
-}
-
-async function fetchWavveEPG(channelCode, channelName, dateCompact) {
-  const url = `https://api.wavve.com/v4/live/epgs?apikey=${CONFIG.wavveKey}&credential=none&device=mobile&drm=none&formattype=json&limit=500&offset=0&partnerId=P-CH&prdtype=2&startdate=${dateCompact}&enddate=${dateCompact}&channelcode=${channelCode}`;
-  try {
-    const res = await fetch(url, { headers: WAVVE_HEADERS });
-    if (!res.ok) return [];
-    const data = await res.json();
-    const items = data?.data?.items || data?.items || [];
-    return items
-      .map(item => {
-        const start = parseTime(item.starttime || item.start_time || '');
-        const end   = parseTime(item.endtime   || item.end_time   || '');
-        if (!inWindow(start)) return null;
-        const genres = [];
-        if (item.category_name) genres.push(item.category_name);
-        return {
-          date: todayIso(),
-          channel: channelName,
-          start, end,
-          title: item.title || item.program_name || '(제목 없음)',
-          genres,
-          runtimeMin: item.runtime ? parseInt(item.runtime) : null,
-          age: item.ratings || item.age || '',
-          plot: item.synopsis || item.description || '',
-        };
-      })
-      .filter(Boolean);
-  } catch { return []; }
-}
-
-async function fetchAllEPG() {
-  const dateCompact = todayCompact();
-  let channelMap;
-  try { channelMap = await fetchWavveChannels(); }
-  catch { channelMap = CHANNEL_MAP; }
-
-  const TARGET = new Set(['KBS1','KBS2','MBC','SBS','tvN','OCN','OCN Movies','CGV','채널CGV']);
-  const promises = Object.entries(channelMap)
-    .filter(([, name]) => TARGET.has(name))
-    .map(([code, name]) => fetchWavveEPG(code, name, dateCompact));
-
-  const results = await Promise.all(promises);
-  return results.flat().sort((a, b) => a.start.localeCompare(b.start));
-}
-
 // ── 캐시 ──────────────────────────────────────
 function loadCache() {
   try {
@@ -150,13 +59,12 @@ function loadCache() {
     return obj;
   } catch { return null; }
 }
-function saveCache(items) {
+function saveCache(data) {
   try {
     localStorage.setItem(CONFIG.cacheKey, JSON.stringify({
       fetchedAt: Date.now(),
       date: todayIso(),
-      updatedAt: new Date().toISOString(),
-      items,
+      ...data,
     }));
   } catch {}
 }
@@ -174,9 +82,11 @@ function setDateLabel() {
 }
 
 function renderPrograms(items) {
+  const today = todayIso();
+  const todayItems = items.filter(p => p.date === today);
   const list = $('list');
   list.innerHTML = '';
-  if (!items || items.length === 0) {
+  if (!todayItems || todayItems.length === 0) {
     list.innerHTML = `
       <div class="empty-panel">
         <div class="empty-icon">📭</div>
@@ -185,7 +95,7 @@ function renderPrograms(items) {
       </div>`;
     return;
   }
-  items.forEach((p, i) => {
+  todayItems.forEach((p, i) => {
     const card = document.createElement('div');
     card.className = 'card';
     card.style.animationDelay = `${i * 60}ms`;
@@ -224,21 +134,24 @@ async function start(forceRefresh = false) {
     const cached = loadCache();
     if (cached) {
       setLoading(false);
-      $('summary').textContent = `21:30~22:00 시작 · ${cached.items.length}개 · 캐시`;
-      renderPrograms(cached.items);
+      const todayItems = (cached.items || []).filter(p => p.date === todayIso());
+      $('summary').textContent = `21:30~22:00 시작 · ${todayItems.length}개 · 캐시`;
+      renderPrograms(cached.items || []);
       renderUpdateBadge(cached.updatedAt);
       return;
     }
   }
 
   try {
-    const items = await fetchAllEPG();
-    const updatedAt = new Date().toISOString();
-    saveCache(items);
+    const res = await fetch(CONFIG.dataUrl + '?t=' + Date.now());
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    saveCache(data);
+    const todayItems = (data.items || []).filter(p => p.date === todayIso());
     setLoading(false);
-    $('summary').textContent = `21:30~22:00 시작 · ${items.length}개`;
-    renderPrograms(items);
-    renderUpdateBadge(updatedAt);
+    $('summary').textContent = `21:30~22:00 시작 · ${todayItems.length}개`;
+    renderPrograms(data.items || []);
+    renderUpdateBadge(data.updatedAt);
   } catch(e) {
     showError(e.message || '네트워크 오류');
   }
