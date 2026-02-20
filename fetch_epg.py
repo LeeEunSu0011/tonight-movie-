@@ -40,6 +40,17 @@ def date_str(dt):
 def strip_episode(title):
     return re.sub(r'\s*[\(\[]?\d+부작?[\)\]]?$', '', title).strip()
 
+def clean_plot(text):
+    if not text: return ''
+    # "장르 : ...\n등급 : ...\n" 제거
+    lines = text.strip().split('\n')
+    clean = []
+    for line in lines:
+        if line.startswith('장르') or line.startswith('등급') or line.strip() == '':
+            continue
+        clean.append(line.strip())
+    return ' '.join(clean).strip()
+
 def is_movie(genres):
     return any(g.strip().lower() in MOVIE_GENRES for g in genres)
 
