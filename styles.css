@@ -356,3 +356,45 @@ footer {
   .card { padding: 14px; }
   .time-row { margin-bottom: 6px; }
 }
+
+/* ── 포스터 레이아웃 ────────────────────────── */
+.card-inner {
+  display: flex;
+  gap: 14px;
+}
+
+.poster-wrap {
+  flex-shrink: 0;
+  width: 80px;
+  height: 120px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #1e1e2a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+}
+
+.poster-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: opacity .3s;
+}
+
+.poster-placeholder {
+  font-size: 28px;
+  opacity: .35;
+}
+
+.card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 모바일에서 포스터 크기 조정 */
+@media (max-width: 380px) {
+  .poster-wrap { width: 66px; height: 100px; }
+}
