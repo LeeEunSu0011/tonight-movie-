@@ -1,10 +1,13 @@
-// app.js - 오늘 밤 영화 v2
+// app.js - 오늘 밤 영화 v3 (TMDB 포스터 지원)
 
 const CONFIG = {
   dataUrl: './data.json',
-  cacheKey: 'epg_cache_v9',
+  cacheKey: 'epg_cache_v10',
+  posterCacheKey: 'poster_cache_v2',
   cacheAgeMin: 30,
   updateSchedule: [0, 6, 12, 18],
+  tmdbKey: '0a3e13faef62e13445d8744883186dbb',
+  tmdbImg: 'https://image.tmdb.org/t/p/w200',
 };
 
 const pad2 = n => String(n).padStart(2, '0');
@@ -17,30 +20,64 @@ function todayIso() {
   return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth()+1)}-${pad2(d.getUTCDate())}`;
 }
 
+// ── TMDB 포스터 ────────────────────────────────
+const posterMemCache = {};
+
+function loadPosterCache() {
+  try { return JSON.parse(localStorage.getItem(CONFIG.posterCacheKey) || '{}'); } catch { return {}; }
+}
+function savePosterCache(cache) {
+  try { localStorage.setItem(CONFIG.posterCacheKey, JSON.stringify(cache)); } catch {}
+}
+
+async function fetchPoster(title) {
+  if (posterMemCache[title] !== undefined) return posterMemCache[title];
+
+  const diskCache = loadPosterCache();
+  if (diskCache[title] !== undefined) {
+    posterMemCache[title] = diskCache[title];
+    return diskCache[title];
+  }
+
+  try {
+    const q = encodeURIComponent(title);
+    const url = `https://api.themoviedb.org/3/search/movie?api_key=${CONFIG.tmdbKey}&query=${q}&language=ko-KR&page=1`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    const path = data.results?.[0]?.poster_path || null;
+    posterMemCache[title] = path;
+    diskCache[title] = path;
+    savePosterCache(diskCache);
+    return path;
+  } catch {
+    posterMemCache[title] = null;
+    return null;
+  }
+}
+
+async function loadPosterToCard(cardEl, title) {
+  const imgEl = cardEl.querySelector('.poster-img');
+  const placeholderEl = cardEl.querySelector('.poster-placeholder');
+  if (!imgEl) return;
+
+  const path = await fetchPoster(title);
+  if (path) {
+    imgEl.src = CONFIG.tmdbImg + path;
+    imgEl.style.display = 'block';
+    if (placeholderEl) placeholderEl.style.display = 'none';
+  }
+}
+
 // ── 연령 배지 ──────────────────────────────────
 function getAgeBadge(age) {
   if (!age) return '';
   const a = age.replace(/\s/g, '');
-
-  let cls = 'all', label = '';
-
-  if (a.includes('19') || a.includes('청소년관람불가')) {
-    cls = 'age19';
-    label = '🔞 19';
-  } else if (a.includes('15')) {
-    cls = 'age15';
-    label = '⚠️ 15';
-  } else if (a.includes('12')) {
-    cls = 'age12';
-    label = '⚠️ 12';
-  } else if (a.includes('전체') || a.includes('ALL') || a.includes('0')) {
-    cls = 'all';
-    label = '전체';
-  } else {
-    return '';
-  }
-
-  return `<span class="age-badge ${cls}">${label}</span>`;
+  if (a.includes('19') || a.includes('청소년관람불가')) return `<span class="age-badge age19">🔞 19</span>`;
+  if (a.includes('15')) return `<span class="age-badge age15">⚠️ 15</span>`;
+  if (a.includes('12')) return `<span class="age-badge age12">⚠️ 12</span>`;
+  if (a.includes('전체') || a.includes('ALL')) return `<span class="age-badge all">전체</span>`;
+  return '';
 }
 
 // ── 업데이트 뱃지 ──────────────────────────────
@@ -126,43 +163,51 @@ function renderPrograms(items) {
     return;
   }
 
+  const cards = [];
+
   todayItems.forEach((p, i) => {
     const card = document.createElement('div');
     card.className = 'card';
     card.style.animationDelay = `${i * 60}ms`;
 
-    // 줄거리: plot이 제목 반복이 아닌 경우만 표시
     const hasRealPlot = p.plot && p.plot !== p.title && !p.plot.match(/^\s*\d+회\s*$/);
-    const plotHtml = hasRealPlot
-      ? `<div class="plot">${p.plot}</div>`
-      : '';
+    const plotHtml = hasRealPlot ? `<div class="plot">${p.plot}</div>` : '';
+    const runtimeHtml = p.runtimeMin ? `<div class="runtime">⏱ ${p.runtimeMin}분</div>` : '';
 
-    // 런타임
-    const runtimeHtml = p.runtimeMin
-      ? `<div class="runtime">⏱ ${p.runtimeMin}분</div>`
-      : '';
-
-    // 장르 태그 (영화 제외, 중복 제외)
-    const genreSkip = new Set(['영화', 'Movie / Drama', 'movie']);
+    const genreSkip = new Set(['Movie / Drama']);
     const genres = (p.genres || []).filter(g => !genreSkip.has(g)).slice(0, 2);
-    const genreHtml = genres.map(g => `<span class="tag">${g}</span>`).join('');
-    const tagsHtml = genreHtml ? `<div class="tags">${genreHtml}</div>` : '';
+    const tagsHtml = genres.length
+      ? `<div class="tags">${genres.map(g => `<span class="tag">${g}</span>`).join('')}</div>`
+      : '';
 
     card.innerHTML = `
-      <div class="time-row">
-        <span class="time">${p.start}${p.end ? ` ~ ${p.end}` : ''}</span>
-        <span class="channel-badge">${p.channel}</span>
+      <div class="card-inner">
+        <div class="poster-wrap">
+          <img class="poster-img" src="" alt="${p.title}" style="display:none" loading="lazy" />
+          <div class="poster-placeholder">🎬</div>
+        </div>
+        <div class="card-body">
+          <div class="time-row">
+            <span class="time">${p.start}${p.end ? ` ~ ${p.end}` : ''}</span>
+            <span class="channel-badge">${p.channel}</span>
+          </div>
+          <div class="title-row">
+            <span class="title">${p.title}</span>
+            ${getAgeBadge(p.age)}
+          </div>
+          ${tagsHtml}
+          ${plotHtml}
+          ${runtimeHtml}
+        </div>
       </div>
-      <div class="title-row">
-        <span class="title">${p.title}</span>
-        ${getAgeBadge(p.age)}
-      </div>
-      ${tagsHtml}
-      ${plotHtml}
-      ${runtimeHtml}
     `;
+
     list.appendChild(card);
+    cards.push({ card, title: p.title });
   });
+
+  // 포스터 비동기 로드
+  cards.forEach(({ card, title }) => loadPosterToCard(card, title));
 }
 
 function showError(msg) {
