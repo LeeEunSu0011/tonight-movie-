@@ -1,23 +1,17 @@
-// tmdb.js - TMDB 포스터 검색 및 캐시
+// tmdb.js - TMDB API (포스터 + 상세정보)
 
 import { CONFIG } from './config.js';
+import { loadFromStorage, saveToStorage } from './utils/cache.js';
 
 const memCache = {};
 
-function loadDiskCache() {
-  try { return JSON.parse(localStorage.getItem(CONFIG.posterCacheKey) || '{}'); } catch { return {}; }
-}
+export async function fetchMovieBasic(title) {
+  const cacheKey = `tmdb_basic_${title}`;
+  if (memCache[cacheKey] !== undefined) return memCache[cacheKey];
 
-function saveDiskCache(cache) {
-  try { localStorage.setItem(CONFIG.posterCacheKey, JSON.stringify(cache)); } catch {}
-}
-
-export async function fetchPoster(title) {
-  if (memCache[title] !== undefined) return memCache[title];
-
-  const disk = loadDiskCache();
+  const disk = loadFromStorage(CONFIG.posterCacheKey) || {};
   if (disk[title] !== undefined) {
-    memCache[title] = disk[title];
+    memCache[cacheKey] = disk[title];
     return disk[title];
   }
 
@@ -27,26 +21,91 @@ export async function fetchPoster(title) {
     const res = await fetch(url);
     if (!res.ok) throw new Error();
     const data = await res.json();
-    const path = data.results?.[0]?.poster_path || null;
-    memCache[title] = path;
-    disk[title] = path;
-    saveDiskCache(disk);
-    return path;
+    const movie = data.results?.[0];
+    const result = movie ? {
+      id: movie.id,
+      poster_path: movie.poster_path || null,
+      vote_average: movie.vote_average || null,
+    } : null;
+
+    memCache[cacheKey] = result;
+    disk[title] = result;
+    saveToStorage(CONFIG.posterCacheKey, disk);
+    return result;
   } catch {
-    memCache[title] = null;
+    memCache[cacheKey] = null;
     return null;
   }
 }
 
-export async function loadPosterToCard(cardEl, title) {
-  const imgEl = cardEl.querySelector('.poster-img');
-  const placeholderEl = cardEl.querySelector('.poster-placeholder');
-  if (!imgEl) return;
+export async function fetchMovieDetail(movieId) {
+  if (!movieId) return null;
+  const cacheKey = `tmdb_detail_${movieId}`;
+  if (memCache[cacheKey] !== undefined) return memCache[cacheKey];
 
-  const path = await fetchPoster(title);
-  if (path) {
-    imgEl.src = CONFIG.tmdbImg + path;
-    imgEl.style.display = 'block';
-    if (placeholderEl) placeholderEl.style.display = 'none';
+  const detailCache = loadFromStorage(CONFIG.detailCacheKey) || {};
+  if (detailCache[movieId] !== undefined) {
+    memCache[cacheKey] = detailCache[movieId];
+    return detailCache[movieId];
+  }
+
+  try {
+    const url = `https://api.themoviedb.org/3/movie/${movieId}/credits?api_key=${CONFIG.tmdbKey}&language=ko-KR`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+
+    const director = data.crew?.find(c => c.job === 'Director')?.name || null;
+    const cast = data.cast?.slice(0, 3).map(c => c.name) || [];
+
+    const result = { director, cast };
+    memCache[cacheKey] = result;
+    detailCache[movieId] = result;
+    saveToStorage(CONFIG.detailCacheKey, detailCache);
+    return result;
+  } catch {
+    memCache[cacheKey] = null;
+    return null;
+  }
+}
+
+export async function loadMovieInfoToCard(cardEl, title) {
+  const basic = await fetchMovieBasic(title);
+  if (!basic) return;
+
+  if (basic.poster_path) {
+    const imgEl = cardEl.querySelector('.poster-img');
+    const placeholderEl = cardEl.querySelector('.poster-placeholder');
+    if (imgEl) {
+      imgEl.src = CONFIG.tmdbImg + basic.poster_path;
+      imgEl.style.display = 'block';
+      if (placeholderEl) placeholderEl.style.display = 'none';
+    }
+  }
+
+  if (basic.vote_average) {
+    const ratingEl = cardEl.querySelector('.movie-rating');
+    if (ratingEl) {
+      ratingEl.textContent = `⭐ ${basic.vote_average.toFixed(1)}`;
+      ratingEl.style.display = 'inline';
+    }
+  }
+
+  const detail = await fetchMovieDetail(basic.id);
+  if (detail) {
+    if (detail.director) {
+      const directorEl = cardEl.querySelector('.movie-director');
+      if (directorEl) {
+        directorEl.textContent = `감독  ${detail.director}`;
+        directorEl.style.display = 'block';
+      }
+    }
+    if (detail.cast?.length) {
+      const castEl = cardEl.querySelector('.movie-cast');
+      if (castEl) {
+        castEl.textContent = `출연  ${detail.cast.join(', ')}`;
+        castEl.style.display = 'block';
+      }
+    }
   }
 }

@@ -1,9 +1,9 @@
 // app.js - 메인 진입점
 
 import { CONFIG } from './config.js';
-import { todayIso, setDateLabel } from './utils.js';
+import { todayIso, setDateLabel } from './utils/date.js';
 import { loadCache, saveCache, fetchEpg } from './epg.js';
-import { setLoading, renderPrograms, renderUpdateBadge, showError, setSummary } from './ui.js';
+import { setLoading, renderPrograms, renderUpdateBadge, showError } from './ui.js';
 
 async function start(forceRefresh = false) {
   setLoading(true);
@@ -13,8 +13,6 @@ async function start(forceRefresh = false) {
     const cached = loadCache();
     if (cached) {
       setLoading(false);
-      const cnt = (cached.items || []).filter(p => p.date === todayIso()).length;
-      setSummary(cnt);
       renderPrograms(cached.items || []);
       renderUpdateBadge(cached.updatedAt);
       return;
@@ -24,9 +22,7 @@ async function start(forceRefresh = false) {
   try {
     const data = await fetchEpg();
     saveCache(data);
-    const cnt = (data.items || []).filter(p => p.date === todayIso()).length;
     setLoading(false);
-    setSummary(cnt);
     renderPrograms(data.items || []);
     renderUpdateBadge(data.updatedAt);
   } catch (e) {
@@ -34,7 +30,6 @@ async function start(forceRefresh = false) {
   }
 }
 
-// 에러 패널의 retry 버튼에서 접근할 수 있도록 전역 노출
 window.appStart = start;
 
 document.addEventListener('DOMContentLoaded', () => {
