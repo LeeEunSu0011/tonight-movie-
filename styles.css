@@ -446,3 +446,18 @@ footer {
   color: var(--text-muted);
   line-height: 1.4;
 }
+
+/* ── 장르/키워드 태그 구분 ───────────────────── */
+.tag-genre {
+  background: var(--accent);
+  color: #0a0a0f;
+  font-weight: 700;
+  border-color: var(--accent);
+}
+
+.tag-keyword {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  font-weight: 400;
+}

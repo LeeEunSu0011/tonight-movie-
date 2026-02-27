@@ -12,11 +12,10 @@ export function MovieCard(p, index) {
   const plotHtml = hasRealPlot ? `<div class="plot">${p.plot}</div>` : '';
   const runtimeHtml = p.runtimeMin ? `<div class="runtime">⏱ ${p.runtimeMin}분</div>` : '';
 
+  // 장르 태그 (항상 첫 번째, 골드색)
   const genreSkip = new Set(['Movie / Drama']);
   const genres = (p.genres || []).filter(g => !genreSkip.has(g)).slice(0, 2);
-  const tagsHtml = genres.length
-    ? `<div class="tags">${genres.map(g => `<span class="tag">${g}</span>`).join('')}</div>`
-    : '';
+  const genreHtml = genres.map(g => `<span class="tag tag-genre">${g}</span>`).join('');
 
   card.innerHTML = `
     <div class="card-inner">
@@ -38,7 +37,10 @@ export function MovieCard(p, index) {
           <span class="movie-director" style="display:none"></span>
           <span class="movie-cast" style="display:none"></span>
         </div>
-        ${tagsHtml}
+        <div class="tags">
+          ${genreHtml}
+          <span class="movie-keywords" style="display:none; gap:6px; flex-wrap:wrap;"></span>
+        </div>
         ${plotHtml}
         ${runtimeHtml}
       </div>

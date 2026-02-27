@@ -1,4 +1,4 @@
-// tmdb.js - TMDB API (포스터 + 상세정보)
+// tmdb.js - TMDB API (포스터 + 상세정보 + 키워드)
 
 import { CONFIG } from './config.js';
 import { loadFromStorage, saveToStorage } from './utils/cache.js';
@@ -50,15 +50,20 @@ export async function fetchMovieDetail(movieId) {
   }
 
   try {
-    const url = `https://api.themoviedb.org/3/movie/${movieId}/credits?api_key=${CONFIG.tmdbKey}&language=ko-KR`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error();
-    const data = await res.json();
+    // 크레딧 + 키워드 동시 요청
+    const [creditsRes, keywordsRes] = await Promise.all([
+      fetch(`https://api.themoviedb.org/3/movie/${movieId}/credits?api_key=${CONFIG.tmdbKey}&language=ko-KR`),
+      fetch(`https://api.themoviedb.org/3/movie/${movieId}/keywords?api_key=${CONFIG.tmdbKey}`)
+    ]);
 
-    const director = data.crew?.find(c => c.job === 'Director')?.name || null;
-    const cast = data.cast?.slice(0, 3).map(c => c.name) || [];
+    const creditsData = creditsRes.ok ? await creditsRes.json() : {};
+    const keywordsData = keywordsRes.ok ? await keywordsRes.json() : {};
 
-    const result = { director, cast };
+    const director = creditsData.crew?.find(c => c.job === 'Director')?.name || null;
+    const cast = creditsData.cast?.slice(0, 3).map(c => c.name) || [];
+    const keywords = keywordsData.keywords?.slice(0, 4).map(k => k.name) || [];
+
+    const result = { director, cast, keywords };
     memCache[cacheKey] = result;
     detailCache[movieId] = result;
     saveToStorage(CONFIG.detailCacheKey, detailCache);
@@ -73,6 +78,7 @@ export async function loadMovieInfoToCard(cardEl, title) {
   const basic = await fetchMovieBasic(title);
   if (!basic) return;
 
+  // 포스터
   if (basic.poster_path) {
     const imgEl = cardEl.querySelector('.poster-img');
     const placeholderEl = cardEl.querySelector('.poster-placeholder');
@@ -83,14 +89,16 @@ export async function loadMovieInfoToCard(cardEl, title) {
     }
   }
 
+  // 평점
   if (basic.vote_average) {
     const ratingEl = cardEl.querySelector('.movie-rating');
     if (ratingEl) {
-      ratingEl.textContent = `⭐ ${basic.vote_average.toFixed(1)}`;
+      ratingEl.textContent = `★ ${basic.vote_average.toFixed(1)}`;
       ratingEl.style.display = 'inline';
     }
   }
 
+  // 감독 + 출연진 + 키워드
   const detail = await fetchMovieDetail(basic.id);
   if (detail) {
     if (detail.director) {
@@ -105,6 +113,15 @@ export async function loadMovieInfoToCard(cardEl, title) {
       if (castEl) {
         castEl.textContent = `출연  ${detail.cast.join(', ')}`;
         castEl.style.display = 'block';
+      }
+    }
+    if (detail.keywords?.length) {
+      const keywordsEl = cardEl.querySelector('.movie-keywords');
+      if (keywordsEl) {
+        keywordsEl.innerHTML = detail.keywords
+          .map(k => `<span class="tag tag-keyword">${k}</span>`)
+          .join('');
+        keywordsEl.style.display = 'flex';
       }
     }
   }
