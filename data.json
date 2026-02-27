@@ -1,48 +1,6 @@
 {
-  "updatedAt": "2026-02-27T21:00:09.761498+09:00",
+  "updatedAt": "2026-02-28T03:00:09.478070+09:00",
   "items": [
-    {
-      "date": "2026-02-27",
-      "channel": "OCN",
-      "start": "22:00",
-      "end": "00:10",
-      "title": "파과",
-      "genres": [
-        "영화",
-        "Movie / Drama"
-      ],
-      "runtimeMin": 130,
-      "age": "15세 이상 관람가",
-      "plot": "파과"
-    },
-    {
-      "date": "2026-02-27",
-      "channel": "OCN Movies",
-      "start": "22:00",
-      "end": "23:50",
-      "title": "더 이퀄라이저 3",
-      "genres": [
-        "영화",
-        "Movie / Drama"
-      ],
-      "runtimeMin": 110,
-      "age": "19세 이상 관람가",
-      "plot": "더 이퀄라이저 3"
-    },
-    {
-      "date": "2026-02-27",
-      "channel": "OCN Movies2",
-      "start": "22:00",
-      "end": "23:50",
-      "title": "새벽의 저주",
-      "genres": [
-        "영화",
-        "Movie / Drama"
-      ],
-      "runtimeMin": 110,
-      "age": "19세 이상 관람가",
-      "plot": "새벽의 저주 인간에 대한 신의 심판은 가끔은 혹독 할지도 모른다. 그래서 지옥을 꽉 차게 만들고 이 죽은 자들은 갈..."
-    },
     {
       "date": "2026-02-28",
       "channel": "OCN",
