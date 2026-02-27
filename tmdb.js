@@ -1,4 +1,4 @@
-// tmdb.js - TMDB API (포스터 + 상세정보 + 키워드)
+// tmdb.js - TMDB API (포스터 + 상세정보 + 장르)
 
 import { CONFIG } from './config.js';
 import { loadFromStorage, saveToStorage } from './utils/cache.js';
@@ -26,6 +26,7 @@ export async function fetchMovieBasic(title) {
       id: movie.id,
       poster_path: movie.poster_path || null,
       vote_average: movie.vote_average || null,
+      genres: movie.genre_ids || [],
     } : null;
 
     memCache[cacheKey] = result;
@@ -50,20 +51,20 @@ export async function fetchMovieDetail(movieId) {
   }
 
   try {
-    // 크레딧 + 키워드 동시 요청
-    const [creditsRes, keywordsRes] = await Promise.all([
-      fetch(`https://api.themoviedb.org/3/movie/${movieId}/credits?api_key=${CONFIG.tmdbKey}&language=ko-KR`),
-      fetch(`https://api.themoviedb.org/3/movie/${movieId}/keywords?api_key=${CONFIG.tmdbKey}`)
+    // 영화 상세정보(장르 포함) + 크레딧 동시 요청
+    const [detailRes, creditsRes] = await Promise.all([
+      fetch(`https://api.themoviedb.org/3/movie/${movieId}?api_key=${CONFIG.tmdbKey}&language=ko-KR`),
+      fetch(`https://api.themoviedb.org/3/movie/${movieId}/credits?api_key=${CONFIG.tmdbKey}&language=ko-KR`)
     ]);
 
+    const detailData = detailRes.ok ? await detailRes.json() : {};
     const creditsData = creditsRes.ok ? await creditsRes.json() : {};
-    const keywordsData = keywordsRes.ok ? await keywordsRes.json() : {};
 
     const director = creditsData.crew?.find(c => c.job === 'Director')?.name || null;
     const cast = creditsData.cast?.slice(0, 3).map(c => c.name) || [];
-    const keywords = keywordsData.keywords?.slice(0, 4).map(k => k.name) || [];
+    const genres = detailData.genres?.slice(0, 3).map(g => g.name) || [];
 
-    const result = { director, cast, keywords };
+    const result = { director, cast, genres };
     memCache[cacheKey] = result;
     detailCache[movieId] = result;
     saveToStorage(CONFIG.detailCacheKey, detailCache);
@@ -98,7 +99,7 @@ export async function loadMovieInfoToCard(cardEl, title) {
     }
   }
 
-  // 감독 + 출연진 + 키워드
+  // 감독 + 출연진 + TMDB 장르 태그
   const detail = await fetchMovieDetail(basic.id);
   if (detail) {
     if (detail.director) {
@@ -115,11 +116,11 @@ export async function loadMovieInfoToCard(cardEl, title) {
         castEl.style.display = 'block';
       }
     }
-    if (detail.keywords?.length) {
+    if (detail.genres?.length) {
       const keywordsEl = cardEl.querySelector('.movie-keywords');
       if (keywordsEl) {
-        keywordsEl.innerHTML = detail.keywords
-          .map(k => `<span class="tag tag-keyword">${k}</span>`)
+        keywordsEl.innerHTML = detail.genres
+          .map(g => `<span class="tag tag-keyword">${g}</span>`)
           .join('');
         keywordsEl.style.display = 'flex';
       }
