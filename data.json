@@ -1,48 +1,6 @@
 {
-  "updatedAt": "2026-03-13T21:00:10.457221+09:00",
+  "updatedAt": "2026-03-14T03:00:13.546303+09:00",
   "items": [
-    {
-      "date": "2026-03-13",
-      "channel": "OCN",
-      "start": "22:00",
-      "end": "23:50",
-      "title": "거룩한 밤: 데몬 헌터스",
-      "genres": [
-        "영화",
-        "Movie / Drama"
-      ],
-      "runtimeMin": 110,
-      "age": "15세 이상 관람가",
-      "plot": "거룩한 밤: 데몬 헌터스"
-    },
-    {
-      "date": "2026-03-13",
-      "channel": "OCN Movies",
-      "start": "22:00",
-      "end": "00:00",
-      "title": "노인을 위한 나라는 없다",
-      "genres": [
-        "영화",
-        "Movie / Drama"
-      ],
-      "runtimeMin": 120,
-      "age": "19세 이상 관람가",
-      "plot": "노인을 위한 나라는 없다 베트남전에 참전했던 퇴역 군인이자 현재 평화롭게 살고 있는 카우보이 모스(조쉬 브롤린)는 총격전이 ..."
-    },
-    {
-      "date": "2026-03-13",
-      "channel": "OCN Movies2",
-      "start": "22:00",
-      "end": "23:40",
-      "title": "헌트",
-      "genres": [
-        "영화",
-        "Movie / Drama"
-      ],
-      "runtimeMin": 100,
-      "age": "19세 이상 관람가",
-      "plot": "헌트"
-    },
     {
       "date": "2026-03-14",
       "channel": "OCN",
