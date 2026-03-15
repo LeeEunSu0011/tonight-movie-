@@ -1,20 +1,6 @@
 {
-  "updatedAt": "2026-03-15T21:00:09.471253+09:00",
+  "updatedAt": "2026-03-16T03:00:09.279143+09:00",
   "items": [
-    {
-      "date": "2026-03-15",
-      "channel": "OCN Movies",
-      "start": "22:00",
-      "end": "00:10",
-      "title": "파과",
-      "genres": [
-        "영화",
-        "Movie / Drama"
-      ],
-      "runtimeMin": 130,
-      "age": "15세 이상 관람가",
-      "plot": "파과"
-    },
     {
       "date": "2026-03-16",
       "channel": "OCN Movies",
